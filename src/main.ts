@@ -130,16 +130,8 @@ eagle.onPluginCreate(async () => {
     // Eagle plugins run in a webview where some global listeners might hijack focus/inputs
     // Fix: Input focus issues in Eagle Plugin environment
     // Eagle plugins run in a webview where some global listeners might hijack focus/inputs
-    const inputs = [
-        els.inputDeckName, els.inputLimitNew, els.inputLimitReview,
-        els.inputLearningSteps, els.inputRetention, els.inputFsrsParams
-    ];
-    inputs.forEach(input => {
-        if (!input) return;
-        // Stop propagation to prevent Eagle from intercepting keypresses/clicks
-        input.addEventListener('mousedown', (e: Event) => e.stopPropagation());
-        input.addEventListener('keydown', (e: Event) => e.stopPropagation());
-    });
+    // Focus fix removed to restore typing functionality
+    // If shortcut conflicts return, we will need a more targeted fix.
 
     loadData();
 
@@ -220,6 +212,9 @@ eagle.onPluginCreate(async () => {
 });
 
 // --- Data Management ---
+function getDbKey(deckId: string, itemId: string) {
+    return `${deckId}_${itemId}`;
+}
 function loadData() {
     try {
         // Load DB
@@ -344,7 +339,7 @@ async function calculateDeckStats(deck: Deck) {
 
     const now = new Date();
     items.forEach(item => {
-        const card = db[item.id];
+        const card = db[getDbKey(deck.id, item.id)];
         if (!card) {
             newCount++;
         } else {
@@ -397,7 +392,15 @@ async function fetchItemsForDeck(deck: Deck): Promise<any[]> {
 }
 
 function deleteDeck(id: string) {
-    if (confirm('确定要删除这个卡组吗？复习进度（数据库）不会被删除。')) {
+    if (confirm('确定要删除这个卡组吗？该卡组的复习进度将被彻底删除。')) {
+        // Cleanup DB and Logs
+        const prefix = id + "_";
+        for (const k in db) {
+            if (k.startsWith(prefix)) delete db[k];
+        }
+        for (const k in logs) {
+            if (k.startsWith(prefix)) delete logs[k];
+        }
         decks = decks.filter(d => d.id !== id);
         saveData();
         renderDashboard();
@@ -472,7 +475,7 @@ async function rescheduleDeck(deck: Deck) {
     let count = 0;
 
     items.forEach(item => {
-        const itemLogs = logs[item.id];
+        const itemLogs = logs[getDbKey(deck.id, item.id)];
         if (itemLogs && itemLogs.length > 0) {
             // Replay History
             // Sort logs by review date just in case
@@ -497,7 +500,7 @@ async function rescheduleDeck(deck: Deck) {
             });
 
             // Update DB
-            db[item.id] = card;
+            db[getDbKey(deck.id, item.id)] = card;
             count++;
         }
     });
@@ -693,7 +696,7 @@ async function startSession(deck: Deck) {
     // For now simple iteration
 
     for (const item of items) {
-        let card = db[item.id];
+        let card = db[getDbKey(deck.id, item.id)];
 
         if (!card) {
             // New Card
@@ -839,12 +842,15 @@ function rate(rating: Rating) {
     const processedCard = record.card;
     const log = record.log;
 
+    if (!currentDeck) return;
+    const key = getDbKey(currentDeck.id, currentItem.id);
+
     // Update DB
-    db[currentItem.id] = processedCard;
+    db[key] = processedCard;
 
     // Save Log
-    if (!logs[currentItem.id]) logs[currentItem.id] = [];
-    logs[currentItem.id].push(log);
+    if (!logs[key]) logs[key] = [];
+    logs[key].push(log);
 
     saveData();
 
