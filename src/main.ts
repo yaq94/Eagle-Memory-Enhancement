@@ -333,34 +333,63 @@ async function renderDashboard() {
 
 async function calculateDeckStats(deck: Deck) {
     const items = await fetchItemsForDeck(deck);
-    let newCount = 0;
-    let learnCount = 0; // Learning + Relearning
-    let dueCount = 0;   // Review && due <= now
+    let totalNewInDeck = 0;  // All cards that are still "new" in DB
+    let learnCount = 0;      // Learning + Relearning
+    let dueCount = 0;        // Review && due <= now
 
     const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    // Count how many NEW cards were studied TODAY (first review = new card graduating)
+    let todayNewStudied = 0;
+
     items.forEach(item => {
-        const card = db[getDbKey(deck.id, item.id)];
+        const key = getDbKey(deck.id, item.id);
+        const card = db[key];
+        const itemLogs = logs[key];
+
         if (!card) {
-            newCount++;
+            // Not in DB = completely new
+            totalNewInDeck++;
         } else {
             if (card.state === State.New) {
-                newCount++;
+                totalNewInDeck++;
             } else if (card.state === State.Learning || card.state === State.Relearning) {
-                // Learning cards are always "in progress"
                 learnCount++;
             } else if (card.state === State.Review) {
                 if (card.due <= now) {
                     dueCount++;
                 }
             }
+
+            // Check if this card was NEW and studied TODAY (first log is today)
+            if (itemLogs && itemLogs.length > 0) {
+                const firstLog = itemLogs[0];
+                const firstReviewDate = new Date(firstLog.review);
+                if (firstReviewDate >= todayStart && itemLogs.length === 1) {
+                    // This card just graduated from New TODAY
+                    // (Only count if it has exactly 1 log, meaning first review was today)
+                    // More robust: check if state was New before first log
+                    todayNewStudied++;
+                } else if (itemLogs.length >= 1) {
+                    // Check if the first review happened today for cards with history
+                    const firstReviewDate = new Date(itemLogs[0].review);
+                    if (firstReviewDate >= todayStart) {
+                        todayNewStudied++;
+                    }
+                }
+            }
         }
     });
 
-    // Apply Limits
+    // Calculate remaining quota for today
     const limitNew = deck.settings.limits?.new || 20;
     const limitReview = deck.settings.limits?.review || 200;
 
-    newCount = Math.min(newCount, limitNew);
+    // Remaining NEW cards to study TODAY = min(totalNewInDeck, limit - alreadyStudiedToday)
+    const remainingNewQuota = Math.max(0, limitNew - todayNewStudied);
+    const newCount = Math.min(totalNewInDeck, remainingNewQuota);
+
     dueCount = Math.min(dueCount, limitReview);
 
     return { total: items.length, newCount, learnCount, dueCount };
@@ -650,10 +679,44 @@ async function saveDeckFromEditor() {
 // Note: Real optimization requires fsrs-optimizer (Wasm/Python) which is too heavy for this plugin currently.
 function bindOptimizeButton() {
     if (els.btnFsrsOptimize) {
-        els.btnFsrsOptimize.addEventListener('click', () => {
-            alert('FSRS Optimizer 暂未集成 (需 Wasm 支持)。\n请使用默认参数或手动输入。');
+        els.btnFsrsOptimize.addEventListener('click', (e) => {
+            e.preventDefault();
+            // Show non-blocking toast instead of focus-stealing alert
+            showToast('FSRS Optimizer 暂未集成 (需 Wasm 支持)。请使用默认参数或手动输入。');
         });
     }
+}
+
+// Non-blocking toast notification
+function showToast(message: string, duration = 3000) {
+    let toast = document.getElementById('app-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'app-toast';
+        toast.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 10000;
+            transition: opacity 0.3s;
+            max-width: 80%;
+            text-align: center;
+        `;
+        document.body.appendChild(toast);
+    }
+    toast.innerText = message;
+    toast.style.opacity = '1';
+    toast.style.display = 'block';
+    setTimeout(() => {
+        toast!.style.opacity = '0';
+        setTimeout(() => { toast!.style.display = 'none'; }, 300);
+    }, duration);
 }
 // Call this in Init
 

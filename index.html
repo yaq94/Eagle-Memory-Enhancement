@@ -757,7 +757,8 @@
                         <div class="settings-body">
                             <div class="settings-row">
                                 <span class="settings-label">卡组名称</span>
-                                <input type="text" id="input-deck-name" class="settings-input" placeholder="输入名称...">
+                                <input type="text" id="input-deck-name" class="settings-input" placeholder="输入名称..."
+                                    tabindex="1" autocomplete="off">
                             </div>
                             <div style="padding: 12px 24px 0 24px;">
                                 <div class="settings-label" style="margin-bottom: 10px;">目标文件夹 (Source)</div>
@@ -782,18 +783,18 @@
                             <div class="settings-row">
                                 <span class="settings-label">每日新卡片上限 (张/天)</span>
                                 <input type="number" id="input-limit-new" class="settings-input" value="20"
-                                    style="width: 80px;">
+                                    style="width: 80px;" tabindex="2" autocomplete="off">
                             </div>
                             <div class="settings-row">
                                 <span class="settings-label">每日复习上限 (次/天)</span>
                                 <input type="number" id="input-limit-review" class="settings-input" value="200"
-                                    style="width: 80px;">
+                                    style="width: 80px;" tabindex="3" autocomplete="off">
                             </div>
                         </div>
                     </div>
 
-                    <!-- Card 3: New Cards (新卡片) -->
-                    <div class="settings-card">
+                    <!-- Card 3: New Cards (新卡片) - Hidden (FSRS auto-manages) -->
+                    <div class="settings-card" style="display:none;">
                         <div class="settings-header">
                             新卡片
                             <span class="icon-help" title="点击查看说明">❓</span>
@@ -811,7 +812,7 @@
                             <div class="settings-row">
                                 <span class="settings-label">学习阶段 (Steps)</span>
                                 <input type="text" id="input-learning-steps" class="settings-input" value="1m 10m"
-                                    placeholder="例如: 1m 10m">
+                                    placeholder="例如: 1m 10m" tabindex="4" autocomplete="off">
                             </div>
                         </div>
                     </div>
@@ -831,14 +832,15 @@
                             <div class="settings-row">
                                 <span class="settings-label">期望的记忆保留率 (Retention)</span>
                                 <input type="number" id="input-retention" class="settings-input" value="0.90"
-                                    step="0.01" max="0.99" min="0.70" style="width: 80px;">
+                                    step="0.01" max="0.99" min="0.70" style="width: 80px;" tabindex="5"
+                                    autocomplete="off">
                             </div>
 
                             <div style="padding: 12px 24px;">
                                 <div class="settings-label" style="margin-bottom: 5px;">FSRS 参数 (Weights)</div>
                                 <textarea id="input-fsrs-params" class="settings-input"
                                     style="width: 100%; height: 80px; font-family: monospace; font-size: 12px; resize: vertical;"
-                                    placeholder="0.4, 1.2, ..."></textarea>
+                                    placeholder="0.4, 1.2, ..." tabindex="6"></textarea>
                             </div>
 
                             <div class="settings-actions" style="justify-content: flex-start; padding-left: 24px;">
