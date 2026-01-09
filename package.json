@@ -1,0 +1,18 @@
+{
+  "name": "eagle-fsrs-memory",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.html",
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --outfile=dist/bundle.js --target=es2020",
+    "watch": "esbuild src/main.ts --bundle --outfile=dist/bundle.js --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "esbuild": "^0.24.2",
+    "ts-fsrs": "^4.5.0",
+    "typescript": "^5.7.3"
+  }
+}

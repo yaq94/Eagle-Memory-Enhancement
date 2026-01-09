@@ -1,0 +1,915 @@
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Eagle FSRS Memory</title>
+    <style>
+        /* --- Theme System --- */
+        :root {
+            /* Light Theme (Default) */
+            --bg-body: #f0f2f5;
+            --bg-card: #ffffff;
+            --bg-sidebar: #fafafa;
+            --text-main: #333333;
+            --text-sub: #666666;
+            --border-color: #e1e1e1;
+            --accent-color: #1890ff;
+            --input-bg: #ffffff;
+            --input-border: #d9d9d9;
+            --btn-default-bg: #ffffff;
+            --btn-default-text: #666666;
+            --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.1);
+            --bg-header: #fafafa;
+            --bg-hover: #f5f5f5;
+            --bg-footer: #ffffff;
+            --text-heading: #333333;
+        }
+
+        [data-theme="dark"] {
+            /* Dark Theme */
+            --bg-body: #121212;
+            --bg-card: #1e1e1e;
+            --bg-sidebar: #2c2c2c;
+            --text-main: #e0e0e0;
+            --text-sub: #aaa;
+            --border-color: #333333;
+            --accent-color: #177ddc;
+            --input-bg: #333333;
+            --input-border: #444;
+            --btn-default-bg: #333333;
+            --btn-default-text: #e0e0e0;
+            --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.5);
+            --bg-header: #2c2c2c;
+            --bg-hover: #383838;
+            --bg-footer: #1e1e1e;
+            --text-heading: #ffffff;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            height: 100vh;
+            overflow: hidden;
+            transition: background-color 0.3s, color 0.3s;
+            text-align: center;
+        }
+
+        /* Toggle Button */
+        #theme-toggle {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            cursor: pointer;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            box-shadow: var(--shadow-card);
+            user-select: none;
+            opacity: 0.8;
+            transition: all 0.2s;
+        }
+
+        #theme-toggle:hover {
+            transform: scale(1.1);
+            opacity: 1;
+        }
+
+        #app {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #view-dashboard,
+        #view-editor {
+            padding: 20px;
+            overflow-y: auto;
+            height: 100%;
+            box-sizing: border-box;
+        }
+
+        #view-review {
+            height: 100%;
+            /* No padding to maximize space for image */
+        }
+
+        /* Removed global button styles that caused conflict */
+        button:focus {
+            outline: none;
+        }
+
+        #review {
+            display: none;
+            margin-top: 20px;
+        }
+
+        #card-image {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            object-fit: contain;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .controls {
+            margin-top: 20px;
+        }
+
+        .stats {
+            margin-bottom: 20px;
+            font-size: 1.2em;
+        }
+
+        /* New Styles */
+        .deck-list {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .deck-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            width: 250px;
+            text-align: left;
+            position: relative;
+            transition: transform 0.2s, box-shadow 0.2s;
+            color: var(--text-main);
+            box-shadow: var(--shadow-card);
+        }
+
+        .deck-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent-color);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .deck-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: var(--text-heading);
+        }
+
+        .deck-stats {
+            color: var(--text-sub);
+            font-size: 0.9em;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--text-sub);
+        }
+
+        .folder-item {
+            padding: 5px;
+            cursor: pointer;
+            color: var(--text-main);
+        }
+
+        .folder-item:hover {
+            background: var(--bg-hover);
+        }
+
+        /* Anki-style Dashboard (Grid Layout) */
+        .dashboard-container {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .deck-table {
+            width: 100%;
+            background: var(--bg-card);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-card);
+            display: flex;
+            /* Flex column for table structure */
+            flex-direction: column;
+        }
+
+        .deck-header,
+        .deck-row {
+            display: grid;
+            grid-template-columns: 1fr 80px 80px 80px 60px;
+            /* Name | New | Learn | Due | Opts */
+            align-items: center;
+            padding: 14px 20px;
+        }
+
+        .deck-header {
+            background: var(--bg-header);
+            border-bottom: 2px solid var(--border-color);
+            font-weight: 600;
+            color: var(--text-heading);
+            font-size: 14px;
+        }
+
+        .deck-row {
+            border-bottom: 1px solid var(--border-color);
+            transition: background 0.1s;
+        }
+
+        .deck-row:last-child {
+            border-bottom: none;
+        }
+
+        .deck-row:hover {
+            background: var(--bg-hover);
+        }
+
+        .col-name {
+            text-align: left;
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--text-main);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .col-stat {
+            text-align: center;
+            font-family: -apple-system, monospace;
+            /* Align font */
+            font-size: 14px;
+            opacity: 1;
+            /* Ensure text color is visible */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .col-ops {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 4px;
+            /* Tight gap */
+        }
+
+        .btn-icon {
+            border: none;
+            background: transparent !important;
+            /* Force transparent override */
+            cursor: pointer;
+            font-size: 16px;
+            color: var(--text-sub);
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            /* Remove potential margin */
+        }
+
+        .btn-icon:hover {
+            color: var(--text-main);
+            background: var(--bg-hover) !important;
+        }
+
+        /* Stat Colors */
+        .text-new {
+            color: #2196f3;
+            font-weight: 600;
+        }
+
+        /* Blue */
+        .text-learn {
+            color: #d32f2f;
+            font-weight: 600;
+        }
+
+        /* Red */
+        .text-due {
+            color: #388e3c;
+            font-weight: 600;
+        }
+
+        /* Green */
+
+        /* Header Stat Labels should be centered to match data */
+        .deck-header .col-stat {
+            font-family: inherit;
+            font-size: 13px;
+            opacity: 1;
+            color: var(--text-heading);
+        }
+
+        .btn-create-floating {
+            margin-bottom: 20px;
+            padding: 8px 20px;
+            font-size: 14px;
+            background: var(--accent-color);
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.1s;
+        }
+
+        .btn-create-floating:hover {
+            transform: translateY(-1px);
+        }
+
+        .btn-create-floating:active {
+            transform: translateY(1px);
+        }
+
+        /* Anki Review Styles */
+        .review-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            justify-content: space-between;
+        }
+
+        .card-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            padding: 20px;
+        }
+
+        .review-footer {
+            background: var(--bg-footer);
+            padding: 15px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .intervals {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 5px;
+            padding-left: 80px;
+            /* Offset for Edit button space */
+            padding-right: 80px;
+        }
+
+        .interval-label {
+            flex: 1;
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-sub);
+            max-width: 100px;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .btn-anki {
+            flex: 1;
+            max-width: 100px;
+            padding: 10px 0;
+            border-radius: 20px;
+            border: 1px solid var(--border-color);
+            background: var(--btn-default-bg);
+            color: var(--text-heading);
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.1s;
+        }
+
+        .btn-anki:hover {
+            background: var(--bg-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-anki:active {
+            transform: translateY(1px);
+        }
+
+        .btn-anki-edit {
+            border-color: var(--border-color);
+            color: var(--text-sub);
+            max-width: 60px;
+        }
+
+        .btn-anki-again {
+            color: #ff7875;
+            border-color: #5c0011;
+        }
+
+        .btn-anki-hard {
+            color: #ffec3d;
+            border-color: #614700;
+        }
+
+        .btn-anki-good {
+            color: #73d13d;
+            border-color: #135200;
+        }
+
+        .btn-anki-easy {
+            color: #40a9ff;
+            border-color: #003a8c;
+        }
+
+        /* Sidebar Styles */
+        .review-main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            /* Contain scrolling */
+        }
+
+        .info-sidebar {
+            width: 300px;
+            background: var(--bg-sidebar);
+            border-left: 1px solid var(--border-color);
+            padding: 24px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            color: var(--text-main);
+            /* Hide scrollbar but keep functionality */
+            scrollbar-width: none;
+            /* Firefox */
+            -ms-overflow-style: none;
+            /* IE/Edge */
+        }
+
+        .info-sidebar::-webkit-scrollbar {
+            display: none;
+            /* Chrome/Safari */
+        }
+
+        .info-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-main);
+        }
+
+        .info-rating {
+            color: #faad14;
+            /* Keep Orange */
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+
+        .info-section {
+            margin-bottom: 20px;
+        }
+
+        .info-label {
+            color: var(--text-sub);
+            font-size: 12px;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        .tag-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .tag-badge {
+            background: rgba(128, 128, 128, 0.2);
+            color: var(--text-main);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .info-notes {
+            color: var(--text-sub);
+            white-space: pre-wrap;
+            line-height: 1.5;
+            font-family: inherit;
+        }
+
+        .editing-input {
+            width: 100%;
+            background: transparent;
+            color: inherit;
+            font-family: inherit;
+            font-size: inherit;
+            font-weight: inherit;
+            border: 1px dashed var(--accent-color);
+            padding: 0;
+            margin: 0;
+            outline: none;
+            resize: none;
+            line-height: inherit;
+            box-sizing: border-box;
+            overflow: hidden;
+            /* Hide scrollbar for auto-grow */
+        }
+
+        /* --- Settings/Editor UI (Anki Style) --- */
+        .settings-wrapper {
+            background: var(--bg-body);
+            padding: 20px;
+            height: 100%;
+            box-sizing: border-box;
+            overflow-y: auto;
+            color: var(--text-main);
+        }
+
+        .settings-container-inner {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .settings-card {
+            background: var(--bg-card);
+            border-radius: 8px;
+            box-shadow: var(--shadow-card);
+            margin-bottom: 20px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .settings-header {
+            font-size: 18px;
+            font-weight: 600;
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-card);
+        }
+
+        .settings-body {
+            padding: 8px 0;
+        }
+
+        .settings-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 24px;
+            border-bottom: 1px solid var(--bg-body);
+            /* Subtle separator */
+        }
+
+        .settings-row:last-child {
+            border-bottom: none;
+        }
+
+        .settings-row:hover {
+            background: rgba(0, 0, 0, 0.02);
+            /* Subtle hover */
+        }
+
+        .settings-label {
+            color: var(--text-main);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .settings-input {
+            background: var(--input-bg);
+            color: var(--text-main);
+            border: 1px solid var(--input-border);
+            border-radius: 4px;
+            padding: 8px 12px;
+            width: 250px;
+            text-align: left;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .settings-input:focus {
+            border-color: var(--accent-color);
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+        }
+
+        .folder-tree {
+            border: 1px solid var(--input-border);
+            background: var(--bg-sidebar);
+            border-radius: 4px;
+            padding: 4px 0;
+            /* Minimal vertical padding */
+            max-height: 250px;
+            overflow-y: auto;
+            margin: 10px 24px 24px 24px;
+            color: var(--text-main);
+        }
+
+        .folder-item {
+            display: flex;
+            align-items: center;
+            padding: 6px 12px;
+            cursor: pointer;
+            transition: background 0.1s;
+            font-size: 13px;
+            user-select: none;
+            /* Inline style handles padding-left for hierarchy */
+        }
+
+        .folder-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .folder-item.selected {
+            background: rgba(24, 144, 255, 0.08);
+            color: var(--accent-color);
+        }
+
+        .folder-item .icon {
+            display: inline-block;
+            width: 16px;
+            text-align: center;
+            margin-right: 6px;
+            font-size: 14px;
+            line-height: 1;
+        }
+
+        .settings-actions {
+            margin-top: 30px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        .icon-help {
+            font-size: 16px;
+            cursor: pointer;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+            float: right;
+            /* Fallback */
+            margin-left: auto;
+            /* Flex alignment */
+        }
+
+        .icon-help:hover {
+            opacity: 1;
+            color: var(--accent-color);
+        }
+
+        .settings-help {
+            background: var(--bg-hover);
+            padding: 12px 24px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 13px;
+            color: var(--text-sub);
+            line-height: 1.6;
+        }
+
+        .settings-help p {
+            margin: 0 0 8px 0;
+        }
+
+        .settings-help ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .btn-settings {
+            padding: 8px 24px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 14px;
+            transition: opacity 0.2s;
+        }
+
+        .btn-settings:hover {
+            opacity: 0.9;
+        }
+
+        .btn-primary {
+            background: var(--accent-color);
+            color: white;
+        }
+
+        .btn-default {
+            background: var(--btn-default-bg);
+            border: 1px solid var(--border-color);
+            color: var(--btn-default-text);
+        }
+    </style>
+    <script type="text/javascript" src="dist/bundle.js"></script>
+</head>
+
+<body>
+    <div id="app">
+        <!-- Theme Toggle -->
+        <div id="theme-toggle" title="切换主题">🌓</div>
+
+        <!-- 视图 1: 仪表盘 (Anki Layout) -->
+        <div id="view-dashboard" style="height: 100%; overflow-y: auto;">
+            <div class="dashboard-container">
+                <div style="text-align: center;">
+                    <!-- Anki often has title 'Decks' or none. Providing a clean centralized creation button -->
+                    <button id="btn-create-deck" class="btn-create-floating">+ 新建卡组</button>
+                </div>
+
+                <div id="deck-list" class="deck-list" style="margin-top: 20px;">
+                    <!-- .deck-table will be rendered here -->
+                    <div style="color: var(--text-sub); text-align: center; margin-top: 40px;">暂无卡组...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 视图 2: 卡组编辑器 (Anki Style) -->
+        <div id="view-editor" style="display: none; height: 100%;">
+            <div class="settings-wrapper">
+                <div class="settings-container-inner">
+                    <div style="margin-bottom: 20px;">
+                        <h2 id="editor-title" style="margin: 0 0 10px 0; font-size: 24px; color: var(--text-heading);">
+                            卡组选项</h2>
+                    </div>
+
+                    <!-- Card 1: General (基础设置) -->
+                    <div class="settings-card">
+                        <div class="settings-header">基础设置</div>
+                        <div class="settings-body">
+                            <div class="settings-row">
+                                <span class="settings-label">卡组名称</span>
+                                <input type="text" id="input-deck-name" class="settings-input" placeholder="输入名称...">
+                            </div>
+                            <div style="padding: 12px 24px 0 24px;">
+                                <div class="settings-label" style="margin-bottom: 10px;">目标文件夹 (Source)</div>
+                            </div>
+                            <div id="folder-selector" class="folder-tree">
+                                加载中...
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card 2: Daily Limits (每日上限) -->
+                    <div class="settings-card">
+                        <div class="settings-header">
+                            每日上限
+                            <span class="icon-help" title="点击查看说明">❓</span>
+                        </div>
+                        <div class="settings-help" style="display: none;">
+                            <p><strong>每日新卡片上限</strong>：限制每天引入的新卡片数量。如果您有很多新卡片，建议设置较低的值（如 20）以避免复习压力过大。</p>
+                            <p><strong>每日复习上限</strong>：限制每天复习的旧卡片数量。如果待复习卡片超过此数值，仪表盘将只显示此数值。建议根据您的时间安排设置（如 200）。</p>
+                        </div>
+                        <div class="settings-body">
+                            <div class="settings-row">
+                                <span class="settings-label">每日新卡片上限 (张/天)</span>
+                                <input type="number" id="input-limit-new" class="settings-input" value="20"
+                                    style="width: 80px;">
+                            </div>
+                            <div class="settings-row">
+                                <span class="settings-label">每日复习上限 (次/天)</span>
+                                <input type="number" id="input-limit-review" class="settings-input" value="200"
+                                    style="width: 80px;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card 3: New Cards (新卡片) -->
+                    <div class="settings-card">
+                        <div class="settings-header">
+                            新卡片
+                            <span class="icon-help" title="点击查看说明">❓</span>
+                        </div>
+                        <div class="settings-help" style="display: none;">
+                            <p><strong>学习阶段 (Steps)</strong>：新卡片在成为“复习卡片”之前的学习步骤。</p>
+                            <p>格式为时间间隔，用空格分隔。例如 <code>1m 10m</code> 表示：</p>
+                            <ul>
+                                <li>第一次学习按“Again”后，1分钟后重来。</li>
+                                <li>按“Good”后，10分钟后再次复习。</li>
+                                <li>再次按“Good”后，卡片毕业，进入跨天复习。</li>
+                            </ul>
+                        </div>
+                        <div class="settings-body">
+                            <div class="settings-row">
+                                <span class="settings-label">学习阶段 (Steps)</span>
+                                <input type="text" id="input-learning-steps" class="settings-input" value="1m 10m"
+                                    placeholder="例如: 1m 10m">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card 4: FSRS Parameters -->
+                    <div class="settings-card">
+                        <div class="settings-header">
+                            FSRS
+                            <span class="icon-help" title="点击查看说明">❓</span>
+                        </div>
+                        <div class="settings-help" style="display: none;">
+                            <p><strong>期望保留率 (Retention)</strong>：您希望记住的卡片比例 (0.70 - 0.99)。数值越高，复习频率越高。</p>
+                            <p><strong>FSRS 参数 (Weights)</strong>：算法的核心参数，控制遗忘曲线。通常不需要手动修改，可以使用“优化”按钮自动计算。</p>
+                            <p><strong>重新排程 (Reschedule)</strong>：开启后，修改参数会立即更新所有卡片的下次复习时间。</p>
+                        </div>
+                        <div class="settings-body">
+                            <div class="settings-row">
+                                <span class="settings-label">期望的记忆保留率 (Retention)</span>
+                                <input type="number" id="input-retention" class="settings-input" value="0.90"
+                                    step="0.01" max="0.99" min="0.70" style="width: 80px;">
+                            </div>
+
+                            <div style="padding: 12px 24px;">
+                                <div class="settings-label" style="margin-bottom: 5px;">FSRS 参数 (Weights)</div>
+                                <textarea id="input-fsrs-params" class="settings-input"
+                                    style="width: 100%; height: 80px; font-family: monospace; font-size: 12px; resize: vertical;"
+                                    placeholder="0.4, 1.2, ..."></textarea>
+                            </div>
+
+                            <div class="settings-actions" style="justify-content: flex-start; padding-left: 24px;">
+                                <button class="btn-default" id="btn-fsrs-optimize" style="font-size: 13px;">优化</button>
+                                <button class="btn-default" id="btn-fsrs-evaluate" style="font-size: 13px;">评估</button>
+                            </div>
+                            <div style="padding: 10px 24px; color: var(--text-sub); font-size: 12px;">
+                                <label style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="checkbox" id="check-reschedule"> 更改时将卡片重新排程 (Reschedule)
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="settings-actions">
+                        <button id="btn-cancel-deck" class="btn-settings btn-default">取消</button>
+                        <button id="btn-save-deck" class="btn-settings btn-primary">保存设置</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 视图 3: 复习界面 -->
+        <div id="view-review" style="display: none;">
+            <div class="review-container">
+                <!-- Flex Row: Image + Sidebar -->
+                <div class="review-main">
+                    <div class="card-container">
+                        <img id="card-image" src="" alt="Card Image" style="display: none;">
+                        <div id="card-error" style="display: none; color: #ff4d4f; padding: 50px;">
+                            无法加载图片
+                            <br><small id="card-error-detail"></small>
+                        </div>
+                    </div>
+
+                    <div class="info-sidebar">
+                        <div id="info-name" class="info-title">-</div>
+                        <div id="info-rating" class="info-rating"></div>
+
+                        <div class="info-section">
+                            <div class="info-label">标签</div>
+                            <div id="info-tags" class="tag-list"></div>
+                        </div>
+
+                        <div class="info-section">
+                            <div class="info-label">注释</div>
+                            <div id="info-notes" class="info-notes">暂无注释</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="review-footer">
+                    <div class="intervals">
+                        <div id="time-again" class="interval-label">-</div>
+                        <div id="time-hard" class="interval-label">-</div>
+                        <div id="time-good" class="interval-label">-</div>
+                        <div id="time-easy" class="interval-label">-</div>
+                    </div>
+                    <div class="controls">
+                        <button id="btn-edit-item" class="btn-anki btn-anki-edit">编辑</button>
+                        <button id="btn-again" class="btn-anki btn-anki-again">重来</button>
+                        <button id="btn-hard" class="btn-anki btn-anki-hard">困难</button>
+                        <button id="btn-good" class="btn-anki btn-anki-good">良好</button>
+                        <button id="btn-easy" class="btn-anki btn-anki-easy">简单</button>
+                        <button id="btn-quit-review" class="btn-anki btn-anki-edit" style="max-width:60px;">退出</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,15 @@
+{
+    "id": "28b72276-b398-4cf9-8cda-77ce9594d79f",
+    "version": "1.0.0",
+    "platform": "all",
+    "arch": "all",
+    "name": "memory",
+    "logo": "/logo.png",
+    "keywords": [],
+    "devTools": false,
+    "main": {
+        "url": "index.html",
+        "width": 1024,
+        "height": 768
+    }
+}
