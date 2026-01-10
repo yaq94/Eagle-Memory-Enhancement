@@ -736,13 +736,12 @@ async function startSession(deck: Deck) {
     // Fetch items
     const items = await fetchItemsForDeck(deck);
     if (items.length === 0) {
-        alert('该卡组没有图片！');
+        showToast('该卡组没有图片！');
         return;
     }
 
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    reviewQueue = [];
 
     // Limit Config
     const limitNew = deck.settings.limits?.new || 20;
@@ -760,69 +759,58 @@ async function startSession(deck: Deck) {
             }
         }
     }
-
-    // Remaining quota for new cards TODAY
     const remainingNewQuota = Math.max(0, limitNew - todayNewStudied);
-    let countNew = 0;
-    let countReview = 0;
 
-    // Anki logic: Filter out Suspended cards (not implemented yet)
-    // Sort items by some criteria? Random for New? For now simple iteration
+    // === Anki-Style Queue Building ===
+    // Separate cards into 3 categories
+    const learningCards: { item: any; card: Card }[] = [];  // Priority 1: Learning/Relearning
+    const reviewCards: { item: any; card: Card }[] = [];    // Priority 2: Review (due)
+    const newCards: { item: any; card: Card }[] = [];       // Priority 3: New
 
     for (const item of items) {
-        let card = db[getDbKey(deck.id, item.id)];
+        const key = getDbKey(deck.id, item.id);
+        let card = db[key];
 
         if (!card) {
-            // New Card
-            if (countNew < remainingNewQuota) {
-                // Initialize new card
-                card = {
-                    due: now,
-                    stability: 0,
-                    difficulty: 0,
-                    elapsed_days: 0,
-                    scheduled_days: 0,
-                    reps: 0,
-                    lapses: 0,
-                    state: State.New,
-                    last_review: undefined
-                } as Card;
-
-                reviewQueue.push({ item, card });
-                countNew++;
+            // Completely new card (not in DB)
+            if (newCards.length < remainingNewQuota) {
+                card = createEmptyCard(now);
+                newCards.push({ item, card });
             }
         } else if (card.state === State.New) {
-            // Existing New Card (seen but still new-ish? or manually reset?)
-            // Treat as New for limit purposes
-            if (countNew < remainingNewQuota) {
-                reviewQueue.push({ item, card });
-                countNew++;
+            // In DB but state is still New
+            if (newCards.length < remainingNewQuota) {
+                newCards.push({ item, card });
             }
         } else if (card.state === State.Learning || card.state === State.Relearning) {
-            // Learning/Relearning cards: include if due within 10 minutes (short-term learning window)
-            const learningWindow = 10 * 60 * 1000; // 10 minutes
+            // Learning/Relearning: always include (no limit)
+            // Only include if due within reasonable window (10 min)
+            const learningWindow = 10 * 60 * 1000;
             if (card.due.getTime() <= now.getTime() + learningWindow) {
-                reviewQueue.push({ item, card });
+                learningCards.push({ item, card });
             }
-        } else if (card.state === State.Review && card.due <= now) {
-            // Review Card
-            if (countReview < limitReview) {
-                reviewQueue.push({ item, card });
-                countReview++;
+        } else if (card.state === State.Review) {
+            // Review: include if due and within limit
+            if (card.due <= now && reviewCards.length < limitReview) {
+                reviewCards.push({ item, card });
             }
         }
     }
 
-    // Sort: Reviews first, then New? Or Interleaved?
-    // User Settings "New/Review Order" is meant to control this.
-    // For now: Sort by Due Date (Reviews usually have earlier dates).
-    reviewQueue.sort((a, b) => a.card.due.getTime() - b.card.due.getTime());
+    // Sort each category by due date
+    learningCards.sort((a, b) => a.card.due.getTime() - b.card.due.getTime());
+    reviewCards.sort((a, b) => a.card.due.getTime() - b.card.due.getTime());
+    // New cards: keep insertion order (or randomize if preferred)
+
+    // === Merge Queue: Learning first, then Review, then New ===
+    reviewQueue = [...learningCards, ...reviewCards, ...newCards];
 
     if (reviewQueue.length === 0) {
-        alert('恭喜！所有卡片大吉大利，今晚吃鸡！（今日任务已完成）');
+        showToast('恭喜！今日任务已完成！🎉');
         return;
     }
 
+    console.log(`Queue built: ${learningCards.length} learning, ${reviewCards.length} review, ${newCards.length} new`);
     switchView('review');
     nextCardLoop();
 }
@@ -833,8 +821,30 @@ function stopSession() {
 }
 
 async function nextCardLoop() {
+    const now = new Date();
+
+    // === Skip cards that are not yet due (Learning cards with future due times) ===
+    while (reviewQueue.length > 0) {
+        const peek = reviewQueue[0];
+        if (peek.card.due.getTime() <= now.getTime()) {
+            break; // Card is due, proceed
+        }
+        const waitMs = peek.card.due.getTime() - now.getTime();
+        if (waitMs <= 60 * 1000) {
+            // Wait up to 1 minute
+            const waitSec = Math.ceil(waitMs / 1000);
+            showToast(`下一张卡片将在 ${waitSec} 秒后可复习...`);
+            await new Promise(resolve => setTimeout(resolve, waitMs + 500));
+            if (!currentDeck) return;
+            continue;
+        } else {
+            reviewQueue.shift(); // Skip cards with long wait
+            console.log(`Skipped card (due in ${Math.round(waitMs / 60000)} min)`);
+        }
+    }
+
     if (reviewQueue.length === 0) {
-        alert('卡组复习完成！');
+        showToast('卡组复习完成！🎉');
         stopSession();
         return;
     }
@@ -914,15 +924,14 @@ function formatInterval(ms: number): string {
 }
 
 function rate(rating: Rating) {
-    if (!currentCard || !currentItem || !currentFsrs) return;
+    if (!currentCard || !currentItem || !currentFsrs || !currentDeck) return;
 
     const now = new Date();
     const scheduling_cards = currentFsrs.repeat(currentCard, now);
     const record = (scheduling_cards as any)[rating];
-    const processedCard = record.card;
+    const processedCard: Card = record.card;
     const log = record.log;
 
-    if (!currentDeck) return;
     const key = getDbKey(currentDeck.id, currentItem.id);
 
     // Update DB
@@ -934,11 +943,17 @@ function rate(rating: Rating) {
 
     saveData();
 
-    // Requeue logic: If interval is short (<= 5 mins), add back to queue
-    const dueTime = processedCard.due.getTime();
-    if (dueTime <= now.getTime() + 5 * 60 * 1000) {
+    // === Anki-Style Requeue Logic ===
+    // Learning/Relearning cards should be re-added to queue (they have short intervals)
+    // Review cards should NOT be re-added (they graduate to next session)
+    const newState = processedCard.state;
+
+    if (newState === State.Learning || newState === State.Relearning) {
+        // Card is still in learning phase, add to end of queue
         reviewQueue.push({ item: currentItem, card: processedCard });
+        console.log(`Card requeued (${newState === State.Learning ? 'Learning' : 'Relearning'}), due: ${processedCard.due}`);
     }
+    // State.Review or State.New (graduated) -> Do not requeue
 
     nextCardLoop();
 }
