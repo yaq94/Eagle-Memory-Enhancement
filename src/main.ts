@@ -618,16 +618,21 @@ async function saveDeckFromEditor() {
     let w: number[] = [];
     try {
         const rawW = els.inputFsrsParams.value.trim();
-        w = rawW.split(/[\s,]+/).map((s: string) => parseFloat(s)).filter((n: number) => !isNaN(n));
-        if (w.length !== 17 && w.length !== 19) { // Simple validation (FSRS v4 vs v5?)
-            // Allow flexible length for now, just warning if critical
-            console.warn('FSRS weights length suspicious:', w.length);
+        if (rawW) {
+            w = rawW.split(/[\s,]+/).map((s: string) => parseFloat(s)).filter((n: number) => !isNaN(n));
+            // Only warn if user provided input but it's invalid length
+            if (w.length > 0 && w.length !== 17 && w.length !== 19) {
+                console.warn('FSRS weights length unexpected:', w.length, '(expected 17 or 19)');
+            }
         }
     } catch (e) {
         console.error('Error parsing weights', e);
-        w = [...generatorParameters({ enable_fuzz: false }).w];
     }
-    if (w.length === 0) w = [...generatorParameters({ enable_fuzz: false }).w];
+    // Use default weights if empty or error
+    if (w.length === 0) {
+        w = [...generatorParameters({ enable_fuzz: false }).w];
+        console.log('Using default FSRS weights');
+    }
 
     const reschedule = els.checkReschedule.checked;
 
