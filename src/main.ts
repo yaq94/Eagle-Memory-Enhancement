@@ -741,29 +741,40 @@ async function startSession(deck: Deck) {
     }
 
     const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     reviewQueue = [];
 
     // Limit Config
     const limitNew = deck.settings.limits?.new || 20;
     const limitReview = deck.settings.limits?.review || 200;
+
+    // Calculate how many NEW cards were already studied TODAY
+    let todayNewStudied = 0;
+    for (const item of items) {
+        const key = getDbKey(deck.id, item.id);
+        const itemLogs = logs[key];
+        if (itemLogs && itemLogs.length > 0) {
+            const firstReviewDate = new Date(itemLogs[0].review);
+            if (firstReviewDate >= todayStart) {
+                todayNewStudied++;
+            }
+        }
+    }
+
+    // Remaining quota for new cards TODAY
+    const remainingNewQuota = Math.max(0, limitNew - todayNewStudied);
     let countNew = 0;
     let countReview = 0;
 
-    // Separate potential cards into New and Review lists first to apply limits?
-    // Or just iterate and stop when limits hit?
-
-    // Anki logic: 
-    // Filter out Suspended cards (not implemented yet)
-
-    // Sort items by some criteria? Random for New?
-    // For now simple iteration
+    // Anki logic: Filter out Suspended cards (not implemented yet)
+    // Sort items by some criteria? Random for New? For now simple iteration
 
     for (const item of items) {
         let card = db[getDbKey(deck.id, item.id)];
 
         if (!card) {
             // New Card
-            if (countNew < limitNew) {
+            if (countNew < remainingNewQuota) {
                 // Initialize new card
                 card = {
                     due: now,
@@ -783,7 +794,7 @@ async function startSession(deck: Deck) {
         } else if (card.state === State.New) {
             // Existing New Card (seen but still new-ish? or manually reset?)
             // Treat as New for limit purposes
-            if (countNew < limitNew) {
+            if (countNew < remainingNewQuota) {
                 reviewQueue.push({ item, card });
                 countNew++;
             }
