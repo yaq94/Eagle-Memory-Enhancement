@@ -798,7 +798,13 @@ async function startSession(deck: Deck) {
                 reviewQueue.push({ item, card });
                 countNew++;
             }
-        } else if (card.due <= now) {
+        } else if (card.state === State.Learning || card.state === State.Relearning) {
+            // Learning/Relearning cards: include if due within 10 minutes (short-term learning window)
+            const learningWindow = 10 * 60 * 1000; // 10 minutes
+            if (card.due.getTime() <= now.getTime() + learningWindow) {
+                reviewQueue.push({ item, card });
+            }
+        } else if (card.state === State.Review && card.due <= now) {
             // Review Card
             if (countReview < limitReview) {
                 reviewQueue.push({ item, card });
