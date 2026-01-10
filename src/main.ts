@@ -821,27 +821,9 @@ function stopSession() {
 }
 
 async function nextCardLoop() {
-    const now = new Date();
-
-    // === Skip cards that are not yet due (Learning cards with future due times) ===
-    while (reviewQueue.length > 0) {
-        const peek = reviewQueue[0];
-        if (peek.card.due.getTime() <= now.getTime()) {
-            break; // Card is due, proceed
-        }
-        const waitMs = peek.card.due.getTime() - now.getTime();
-        if (waitMs <= 60 * 1000) {
-            // Wait up to 1 minute
-            const waitSec = Math.ceil(waitMs / 1000);
-            showToast(`下一张卡片将在 ${waitSec} 秒后可复习...`);
-            await new Promise(resolve => setTimeout(resolve, waitMs + 500));
-            if (!currentDeck) return;
-            continue;
-        } else {
-            reviewQueue.shift(); // Skip cards with long wait
-            console.log(`Skipped card (due in ${Math.round(waitMs / 60000)} min)`);
-        }
-    }
+    // === Allow Immediate Review ===
+    // No waiting for due time - user can review any card in queue immediately
+    // FSRS will adjust intervals based on actual review time
 
     if (reviewQueue.length === 0) {
         showToast('卡组复习完成！🎉');
